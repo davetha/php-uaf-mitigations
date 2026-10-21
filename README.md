@@ -1,8 +1,7 @@
 # php-uaf-mitigations
 Defensive distribution: source patches, live detection, and a runtime blocker
 for the PHP unserialize-reentrancy UAF family. This kit
-contains NO proof-of-concept or exploit code — the accompanying repository
-research documents stay out of this directory by design.
+contains NO proof-of-concept or exploit code, by design. It
 
 ## Contents
 
