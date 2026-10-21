@@ -41,3 +41,14 @@ unsafety: bug36424, bug70172, bug70172_2, bug71940, bug70219_1, max_depth.
 - 7.x/5.x: the var_unserializer grammar differs substantially; only 0003's
   upstream equivalent may exist for your branch. For EOL branches prefer the
   detection/block stack (DETECTION.md) and upgrade planning.
+
+## Relation to the official security releases
+
+php 8.5.12 / 8.4.27 (2026-10-21) contain the official fixes for the
+2026 unserialize-related CVEs (OOM-bailout state corruption, commit
+31c0ea7d7f). These patches are complementary serialize-reentrancy
+hardening, NOT the official CVE fix: **upgrade to 8.5.12+ / 8.4.27+ for
+the CVEs themselves.** The patches are most useful on EOL branches that
+will never receive the official fix, or stacked on top of current
+releases for defense in depth. The detection and blocking stack remains
+relevant in all cases.
