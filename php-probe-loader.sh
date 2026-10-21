@@ -84,14 +84,18 @@ do_start() {
             n="reentry-$(echo "$b" | tr '/.' '__')"
             case "$ENGINE:$TIER" in
                 stap:3)
-                    start_one "$n" stap -g "$BASE/stap/php-unserialize-reentry-block.stp" "$b" -G MODE=2 ;;
+                    start_one "$n" stap -g "$BASE/stap/php-unserialize-reentry-block.stp" "$b" -G MODE=2
+                    start_one "$n-dw" stap -g "$BASE/stap/php-unserialize-destroy-window-block.stp" "$b" -G MODE=2 ;;
                 stap:2)
-                    start_one "$n" stap "$BASE/stap/php-unserialize-reentry-detect.stp" "$b" ;;
+                    start_one "$n" stap "$BASE/stap/php-unserialize-reentry-detect.stp" "$b"
+                    start_one "$n-dw" stap "$BASE/stap/php-unserialize-destroy-window-detect.stp" "$b" ;;
                 bpftrace:3)
                     # --unsafe is bpftrace's gate for signal()
-                    start_one "$n" bpftrace --unsafe "$BASE/bpftrace/php-unserialize-reentry-block.bt" "$b" ;;
+                    start_one "$n" bpftrace --unsafe "$BASE/bpftrace/php-unserialize-reentry-block.bt" "$b"
+                    start_one "$n-dw" bpftrace --unsafe "$BASE/bpftrace/php-unserialize-destroy-window-block.bt" "$b" ;;
                 bpftrace:2)
-                    start_one "$n" bpftrace "$BASE/bpftrace/php-unserialize-reentry-detect.bt" "$b" ;;
+                    start_one "$n" bpftrace "$BASE/bpftrace/php-unserialize-reentry-detect.bt" "$b"
+                    start_one "$n-dw" bpftrace "$BASE/bpftrace/php-unserialize-destroy-window-detect.bt" "$b" ;;
             esac
         done
     fi

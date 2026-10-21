@@ -1,0 +1,27 @@
+#! /usr/bin/env stap
+# php-unserialize-destroy-window-detect.stp - stap twin of the bpftrace
+# destroy-window probe. Catches the var_destroy context-reuse family
+# (upstream GH #21824, fix PR #21828 unmerged as of 2026-10-21):
+# php_var_unserialize_destroy() runs object destructors while the var_hash
+# is mid-teardown; a destructor calling unserialize() re-enters the dying
+# context. Ordinary reentry-depth probing misses it (outer call returned).
+#
+# Usage: stap php-unserialize-destroy-window-detect.stp /path/to/php
+#   alert-only; see php-unserialize-destroy-window-block.stp for MODE=2.
+
+global in_destroy;
+
+probe process(@1).function("php_var_unserialize_destroy") {
+    in_destroy[pid()] = 1
+}
+
+probe process(@1).function("php_var_unserialize_destroy").return {
+    delete in_destroy[pid()]
+}
+
+probe process(@1).function("php_var_unserialize") {
+    if (in_destroy[pid()]) {
+        printf("[DESTROY-REENTRY] %s pid %d unserialize() inside var_hash teardown window\n",
+               execname(), pid())
+    }
+}

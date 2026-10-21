@@ -1,0 +1,39 @@
+#! /usr/bin/env stap -g
+# php-unserialize-destroy-window-block.stp - block, not just watch: the
+# var_destroy context-reuse family (upstream GH #21824, fix PR #21828
+# unmerged as of 2026-10-21) needs unserialize() entered inside the
+# php_var_unserialize_destroy() teardown window. This arms that window and
+# acts per MODE:
+#
+#   MODE=1 (default) ALERT only
+#   MODE=2 SIGKILL the worker the moment the reentry starts - the request
+#          dies BEFORE the freed-chain read / dtor-block write completes;
+#          prefork/fpm respawns the worker.
+#
+# Usage: stap -g php-unserialize-destroy-window-block.stp /path/to/php [-G MODE=2]
+#
+# Run MODE=1 for a day first: an app legitimately calling unserialize() from
+# a destructor running during teardown will be killed in MODE=2 - though that
+# is exactly the pattern the unmerged upstream fix forbids. Does not cover
+# the OOM-bailout CVEs (see DETECTION.md).
+
+global MODE = 1;
+global in_destroy;
+
+probe process(@1).function("php_var_unserialize_destroy") {
+    in_destroy[pid()] = 1
+}
+
+probe process(@1).function("php_var_unserialize_destroy").return {
+    delete in_destroy[pid()]
+}
+
+probe process(@1).function("php_var_unserialize") {
+    if (in_destroy[pid()]) {
+        printf("[DESTROY-REENTRY] %s pid %d mode=%d\n", execname(), pid(), MODE)
+        if (MODE == 2) {
+            printf("[DESTROY-BLOCK-KILL] killing %d before teardown UAF completes\n", pid())
+            raise(9)
+        }
+    }
+}

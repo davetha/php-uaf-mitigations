@@ -1,0 +1,41 @@
+#!/usr/bin/env bpftrace
+// php-unserialize-destroy-window-block.bt - enforcement twin of
+// php-unserialize-destroy-window-detect.bt. SIGKILLs the worker the moment
+// unserialize() is entered inside the var_hash teardown window (the GH
+// #21824 var_destroy context-reuse shape) - before the freed-chain read or
+// dtor-block write can complete.
+//
+// Usage: sudo bpftrace --unsafe php-unserialize-destroy-window-block.bt /path/to/php
+//   (--unsafe is bpftrace's gate for signal().)
+// TEST ON A CANARY FIRST: an application legitimately calling unserialize()
+// from a destructor that happens to run during teardown will be killed too -
+// though that is exactly the pattern the unmerged upstream fix forbids.
+// Does not cover the OOM-bailout CVEs (see DETECTION.md).
+
+BEGIN
+{
+    printf("destroy-window BLOCKER on %s - workers get SIGKILL on teardown reentry\n", str($1));
+}
+
+uprobe:$1:php_var_unserialize_destroy
+{
+    @in_destroy[pid] = 1;
+}
+
+uretprobe:$1:php_var_unserialize_destroy
+{
+    $d = delete(@in_destroy[pid]);
+}
+
+uprobe:$1:php_var_unserialize
+/@in_destroy[pid] == 1/
+{
+    printf("[DESTROY-BLOCK-KILL] %s pid=%d unserialize() inside var_hash teardown window -> SIGKILL\n",
+           comm, pid);
+    signal("SIGKILL");
+}
+
+END
+{
+    clear(@in_destroy);
+}

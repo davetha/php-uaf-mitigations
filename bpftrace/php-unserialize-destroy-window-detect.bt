@@ -1,0 +1,40 @@
+#!/usr/bin/env bpftrace
+// php-unserialize-destroy-window-detect.bt - catches the var_destroy
+// context-reuse family (upstream GH #21824, fix PR #21828 unmerged as of
+// 2026-10-21): php_var_unserialize_destroy() dispatches object destructors
+// while the var_hash is mid-teardown; a destructor that calls unserialize()
+// re-enters the dying context (R:/r: read freed chain blocks, dtor-block
+// writes). The ordinary reentry probe MISSES this shape: the outer
+// php_var_unserialize has already returned, so nesting depth reads 1.
+// This probe arms a window on php_var_unserialize_destroy instead and
+// alerts on any php_var_unserialize inside it.
+//
+// Usage: sudo bpftrace php-unserialize-destroy-window-detect.bt /path/to/php
+// Alert-only; the -block twin enforces.
+
+BEGIN
+{
+    printf("destroy-window probe on %s\n", str($1));
+}
+
+uprobe:$1:php_var_unserialize_destroy
+{
+    @in_destroy[pid] = 1;
+}
+
+uretprobe:$1:php_var_unserialize_destroy
+{
+    $d = delete(@in_destroy[pid]);
+}
+
+uprobe:$1:php_var_unserialize
+/@in_destroy[pid] == 1/
+{
+    printf("[DESTROY-REENTRY] %s pid=%d unserialize() inside var_hash teardown window\n",
+           comm, pid);
+}
+
+END
+{
+    clear(@in_destroy);
+}
