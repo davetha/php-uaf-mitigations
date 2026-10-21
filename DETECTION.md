@@ -1,5 +1,24 @@
 # Detection & blocking
 
+## Quick start: the loader
+
+`php-probe-loader.sh` manages the whole stack (start/stop/status/restart,
+engine auto-detection, PHP-binary discovery, per-probe logs and pidfiles in
+`/var/run/php-uaf-probes/`):
+
+```
+./php-probe-loader.sh start                      # tier 1, engine auto-detected
+./php-probe-loader.sh start --tier 2             # + reentrancy probe per PHP binary
+./php-probe-loader.sh start --tier 3             # + SIGKILL blocker (see below)
+./php-probe-loader.sh status                     # running probes + alert counts
+./php-probe-loader.sh stop
+```
+
+Tier 3 kills workers by design; run tier 2 in alert mode for a day first.
+Manual per-script usage follows.
+
+## Manual usage
+
 Two engines: **bpftrace** (modern kernels, 4.9+) and **systemtap**
 (el7/el8/CloudLinux - the cPanel world). Same three-tier design.
 
