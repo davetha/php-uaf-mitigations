@@ -1,0 +1,33 @@
+#! /usr/bin/env stap
+# php-suspicious-activity.stp — CentOS 7 / kernel 3.10 replacement for
+# bpftrace/php-suspicious-activity.bt (el7 has no bpftrace; kernel too old).
+# Install first: yum install systemtap systemtap-runtime; debuginfo-install kernel
+# Run: stap php-suspicious-activity.stp
+# Alerts when a PHP worker spawns processes from odd paths, opens files in
+# world-writable dirs, or makes outbound IPv4 connections.
+
+function is_php() {
+    c = execname()
+    return (c == "php-fpm" || c == "php" || c == "lsphp" ||
+            c == "httpd" || c == "apache2" || c =~ "^php[0-9]" ||
+            c =~ "^lsphp")
+}
+
+probe syscall.execve {
+    if (is_php() && (
+        filename =~ "^/tmp/" || filename =~ "^/dev/shm/" || filename =~ "\\.\\./")) {
+        printf("[EXECVE] %s (pid %d) -> %s\n", execname(), pid(), filename)
+    }
+}
+
+probe syscall.openat, syscall.open {
+    if (is_php() && filename =~ "^/tmp/" && filename !~ "^/tmp/php") {
+        printf("[OPEN] %s (pid %d) -> %s\n", execname(), pid(), filename)
+    }
+}
+
+probe syscall.connect {
+    if (is_php() && user_uint16(uaddr) == 2) {
+        printf("[CONNECT] %s (pid %d) IPv4\n", execname(), pid())
+    }
+}

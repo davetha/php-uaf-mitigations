@@ -1,0 +1,12 @@
+#! /usr/bin/env stap
+# php-uprobe-template.stp — function-entry tracing for the CVE target on
+# CentOS 7 / el7 (no bpftrace there; stap needs kernel-debuginfo).
+# Fill in the two placeholders below from the disclosure, then:
+#   stap php-uprobe-template.stp
+# Any hit from an untrusted code path is a lead; a healthy host is quiet.
+
+probe process("PHPPATH").function("SYMFUNC") {
+    printf("[HIT] %s pid=%d\n", execname(), pid())
+}
+
+probe begin { printf("uprobe ready\n") }

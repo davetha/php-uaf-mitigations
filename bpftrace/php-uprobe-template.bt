@@ -1,0 +1,14 @@
+// php-uprobe-template.bt - function-entry tracing for the CVE target.
+// Fill in PHPPATH (and SYMFUNC below) after disclosure, e.g.:
+//   sed -e 's|PHPPATH|/usr/sbin/php-fpm|' -e 's|SYMFUNC|target_func|' \
+//       php-uprobe-template.bt > /tmp/t.bt && sudo bpftrace /tmp/t.bt
+// Reports comm/pid on every call to the named function in the given PHP
+// binary (or libphp .so). Any hit from an untrusted code path is a lead;
+// a healthy host should be quiet. Requires the target to have symbols
+// (debuginfo or dynsym).
+BEGIN { printf("uprobe ready\n"); }
+
+uprobe:PHPPATH:SYMFUNC
+{
+    printf("[HIT] %s pid=%d\n", comm, pid);
+}

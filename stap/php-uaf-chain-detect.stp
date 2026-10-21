@@ -1,0 +1,68 @@
+#! /usr/bin/env stap
+# php-uaf-chain-detect.stp — CentOS 7 / el7 live detection of the
+# unserialize var_hash UAF chain. kernel-debuginfo NOT required (syscall
+# tapsets only). Install: yum install systemtap systemtap-runtime.
+# Run: stap php-uaf-chain-detect.stp            (alert mode)
+#      stap -g -G KILL=1 php-uaf-chain-detect.stp  (kill worker on payoff;
+#      the -g guru flag is REQUIRED for the raise() kill path)
+#
+# Signatures:
+#  PAYOFF: php-family worker execve()s a shell (zif_system/system() stage).
+#  CRASH-ORACLE: worker dies by SIGSEGV repeatedly (address-probing phase;
+#                prefork respawns, exploit keeps crashing replacements).
+
+global KILL = 0;
+
+function is_php() {
+    // php/php-fpm/php-cgi (stock, ea-phpXX, alt-php), lsphp/lsphpXX
+    // (LiteSpeed incl. cPanel+LS), httpd/apache2 (mod_php),
+    // cpanel_php_fpm (cPanel internal UI PHP), imunify360-php* (Imunify360)
+    return (execname() == "php" || execname() == "httpd" || execname() == "apache2" ||
+            execname() =~ "^php-" || execname() =~ "^php[0-9]" || execname() =~ "^lsphp" ||
+            execname() =~ "^cpanel_php" || execname() =~ "^imunify360-php")
+}
+
+probe syscall.execve {
+    if (is_php() && (filename == "/bin/sh" || filename == "/bin/bash" || filename == "/bin/dash")) {
+        printf("[PAYOFF] %s (pid %d) execve(%s)\n", execname(), pid(), filename)
+        if (KILL) {
+            printf("[PAYOFF] killing %d\n", pid())
+            raise(9)
+        }
+    }
+}
+
+global segv
+global deaths
+
+probe signal.handle {
+    // Fires in the dying process's own context: execname() is the worker.
+    if ((sig == 11 || sig == 6) && is_php()) {
+        deaths++
+        segv[pid()]++
+        if (sig == 6) {
+            // SIGABRT = zend_mm_heap corrupted / glibc allocator aborts
+            // (extract() EXTR_REFS handlers, ftp data_accept double free)
+            printf("[CRASH-ORACLE] %s pid %d SIGABRT\n", execname(), pid())
+        }
+        if (segv[pid()] >= 20) {
+            printf("[CRASH-ORACLE] %s pid %d hit by %d SIGSEGVs\n", execname(), pid(), segv[pid()])
+            delete segv[pid()]
+        }
+    }
+}
+
+probe timer.s(10) {
+    // worker-death oracle: SIGSEGV/SIGABRT across ALL php workers in the
+    // window (fiber/zip class kills one worker per attempt; prefork churn
+    // defeats per-pid rates, so count globally).
+    if (deaths >= 3) {
+        printf("[CRASH-ORACLE] %d php worker deaths in 10s\n", deaths)
+    }
+    deaths = 0
+}
+
+function is_pid_php(p) {
+    return (p > 0 && (pid2execname(p) =~ "^(php|lsphp|cpanel_php|imunify360-php)" ||
+            pid2execname(p) == "httpd" || pid2execname(p) == "apache2"))
+}

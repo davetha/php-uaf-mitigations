@@ -1,0 +1,51 @@
+--- a/ext/standard/var_unserializer.re
++++ b/ext/standard/var_unserializer.re
+@@ -772,7 +772,12 @@
+ 
+ 	if (ce->unserialize == NULL) {
+ 		zend_error(E_WARNING, "Class %s has no unserializer", ZSTR_VAL(ce->name));
++		/* phpguard 0005: object init may evaluate constant-AST property defaults
++		 * whose autoloader can call unserialize(); it must not share the outer
++		 * var_hash (b4a63ec scope gap, object_custom site). */
++		BG(serialize_lock)++;
+ 		object_init_ex(rval, ce);
++		BG(serialize_lock)--;
+ 	} else if (ce->unserialize(rval, ce, (const unsigned char*)*p, datalen, (zend_unserialize_data *)var_hash) != SUCCESS) {
+ 		return 0;
+ 	}
+@@ -821,13 +826,19 @@
+ 	has_wakeup = Z_OBJCE_P(rval) != PHP_IC_ENTRY
+ 		&& zend_hash_exists(&Z_OBJCE_P(rval)->function_table, ZSTR_KNOWN(ZEND_STR_WAKEUP));
+ 
++	/* phpguard 0005: property-table build evaluates constant-AST defaults and
++	 * hooks fire during writes; both can autoload or run unserialize() callbacks
++	 * that must not share the outer context (b4a63ec scope gap, object_common). */
++	BG(serialize_lock)++;
+ 	ht = Z_OBJPROP_P(rval);
+ 	if (elements >= (zend_long)(HT_MAX_SIZE - zend_hash_num_elements(ht))) {
+ 		return 0;
+ 	}
+ 
+ 	zend_hash_extend(ht, zend_hash_num_elements(ht) + elements, HT_IS_PACKED(ht));
+-	if (!process_nested_object_data(UNSERIALIZE_PASSTHRU, ht, elements, Z_OBJ_P(rval))) {
++	bool processed_ok = process_nested_object_data(UNSERIALIZE_PASSTHRU, ht, elements, Z_OBJ_P(rval));
++	BG(serialize_lock)--;
++	if (!processed_ok) {
+ 		if (has_wakeup) {
+ 			ZVAL_DEREF(rval);
+ 			GC_ADD_FLAGS(Z_OBJ_P(rval), IS_OBJ_DESTRUCTOR_CALLED);
+@@ -1335,7 +1346,13 @@
+ 		return 0;
+ 	}
+ 
+-	if (object_init_ex(rval, ce) == FAILURE) {
++	/* phpguard 0005: this object init evaluates constant-AST property defaults
++	 * and can trigger the autoloader, whose unserialize() calls must not share
++	 * the outer var_hash (b4a63ec scope gap, O:-rule instantiation site). */
++	BG(serialize_lock)++;
++	zend_result init_ok = object_init_ex(rval, ce);
++	BG(serialize_lock)--;
++	if (init_ok == FAILURE) {
+ 		zend_string_release_ex(class_name, 0);
+ 		return 0;
+ 	}

@@ -1,0 +1,58 @@
+#!/usr/bin/env bpftrace
+//php-uaf-chain-detect.bt --- live detection of the unserialize var_hash UAF
+//exploit chain (Calif MAD Bugs class / CVE-2026-109618 era). Kernel 4.9+,
+//root required. Signatures:
+#
+//PAYOFF: a PHP worker (php/php-fpm/lsphp/httpd/apache2) execve()s a shell
+//(zif_system / libc system() reached via forged dispatch).
+//Legit apps that shell out also trip this; tune the filter.
+//CRASH-ORACLE: user page-fault bursts in php workers = the address-probing
+//stage crashing prefork workers repeatedly.
+#
+//Usage: sudo bpftrace php-uaf-chain-detect.bt
+//Alert-only. el7 counterpart: stap/php-uaf-chain-detect.stp (can SIGKILL).
+
+//comm match: php/php-fpm/php-cgi (stock, ea-phpXX, alt-php), lsphp/lsphpXX
+//(LiteSpeed incl. cPanel+LS), httpd/apache2 (mod_php),
+//cpanel_php_fpm (cPanel internal UI PHP), imunify360-php* (Imunify360).
+
+BEGIN
+{
+    printf("php-uaf-chain-detect active (payoff + crash-oracle)\n");
+}
+
+tracepoint:syscalls:sys_enter_execve
+/(comm == "php" || comm =~ "^php-" || comm =~ "^php[0-9]" || comm =~ "^lsphp" || comm =~ "^cpanel_php" || comm =~ "^imunify360-php" || comm == "httpd" || comm == "apache2")/
+{
+    $f = str(args.filename);
+    if ($f == "/bin/sh" || $f == "/bin/bash" || $f == "/bin/dash") {
+        printf("[PAYOFF] %s pid=%d execve(%s)\n", comm, pid, $f);
+    }
+}
+
+tracepoint:exceptions:page_fault_user
+/(comm == "php" || comm =~ "^php-" || comm =~ "^php[0-9]" || comm =~ "^lsphp" || comm =~ "^cpanel_php" || comm =~ "^imunify360-php" || comm == "httpd" || comm == "apache2")/
+{
+    @faults[pid] = count();
+}
+
+tracepoint:signal:signal_generate
+/(args.sig == 11 || args.sig == 6) && (comm == "php" || comm =~ "^php-" || comm =~ "^php[0-9]" || comm =~ "^lsphp" || comm =~ "^cpanel_php" || comm =~ "^imunify360-php" || comm == "httpd" || comm == "apache2")/
+{
+    @deaths[sig] = count();
+}
+
+interval:s:10
+{
+    print("=== user page faults per php worker pid (crash-oracle signal) ===");
+    print(@faults);
+    clear(@faults);
+    // worker-death oracle: SIGSEGV/SIGABRT deaths in the window (SIGABRT =
+    // zend_mm_heap corrupted / glibc allocator aborts; SIGSEGV = fiber/zip
+    // class). Global count, not per-pid: prefork churn defeats per-pid rates.
+    $d = (@deaths[11] + @deaths[6]);
+    if ($d >= 3) {
+        printf("[CRASH-ORACLE] %d php worker deaths in 10s (SIGSEGV=%d SIGABRT=%d)\n", $d, @deaths[11], @deaths[6]);
+    }
+    clear(@deaths);
+}

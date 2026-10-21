@@ -1,0 +1,42 @@
+#! /usr/bin/env stap
+# php-unserialize-reentry-detect.stp — pre-payoff detection of the
+# unserialize var_hash exploit family (CVE-2026-109618 class). Attaches a
+# uprobe to php_var_unserialize in the PHP binary's dynamic symbol table
+# (works on stripped binaries; no debuginfo needed) and alerts when the
+# same process nests unserialize() >= DEPTH levels — the shape every
+# variant of this chain needs (Serializable::unserialize re-entry, enum
+# autoloader, AST-default autoloader, attacker-planted session decode).
+#
+# Usage: stap php-unserialize-reentry-detect.stp /path/to/php [-G THR=2]
+#   e.g. stap php-unserialize-reentry-detect.stp /opt/alt/php74/usr/bin/php
+#   depth threshold defaults to 2 (any nesting is unusual); raise with -G THR=3
+# Any PHP binary works: /usr/bin/php, ea-php/alt-php php/php-cgi, lsphp.
+# Alert-only.
+
+global depth;
+global THR = 2;
+
+probe process(@1).function("php_var_unserialize") {
+    depth[pid()]++
+}
+
+probe process(@1).function("php_var_unserialize").return {
+    d = depth[pid()]
+    if (d >= THR) {
+        printf("[REENTRY] %s pid %d nested unserialize depth %d\n",
+               execname(), pid(), d)
+    }
+    if (d <= 1) {
+        delete depth[pid()]
+    } else {
+        depth[pid()] = d - 1
+    }
+}
+
+probe timer.s(30) {
+    foreach (p+ in depth) {
+        if (depth[p] > 0) {
+            printf("[STUCK] pid %d depth %d (unserialize did not return)\n", p, depth[p])
+        }
+    }
+}

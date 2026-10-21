@@ -1,0 +1,50 @@
+#! /usr/bin/env stap -g
+# php-unserialize-reentry-block.stp — block, not just watch: the
+# unserialize var_hash exploit family (CVE-2026-109618 class) requires a
+# nested unserialize() inside an ongoing one. Attaches a uprobe to
+# php_var_unserialize (dynsym; works on stripped binaries) and acts on
+# nesting per MODE:
+#
+#   MODE=1 (default) ALERT only
+#   MODE=2 SIGKILL the worker the moment nesting starts — the request dies
+#          BEFORE the UAF completes; prefork/fpm respawns the worker. This
+#          is the supported blocking mode.
+#
+# Usage: stap -g php-unserialize-reentry-block.stp /path/to/php [-G MODE=2]
+#   e.g. stap -g php-unserialize-reentry-block.stp /opt/alt/php74/usr/bin/php -G MODE=2
+#
+# A graceful MODE=3 (register-rewrite so the nested call returns false)
+# was prototyped and rejected: php_var_unserialize takes the cursor as
+# `const unsigned char **p`, and the obvious clobber (p = max) sends the
+# parser past the buffer end — OOB read, worker crash. Register-level
+# call denial is ABI-fragile on uprobes; do not resurrect it. The real
+# graceful fix is the patch kit (0001/0003/0005); this script is the
+# runtime stopgap for hosts that cannot be patched.
+#
+# Run MODE=1 for a day first to confirm your app never nests legitimately;
+# rare frameworks (unserialize inside __wakeup) do.
+
+global MODE = 1;
+global depth;
+
+probe process(@1).function("php_var_unserialize")
+{
+    depth[pid()]++
+    if (depth[pid()] >= 2) {
+        printf("[REENTRY] %s pid %d depth %d mode=%d\n", execname(), pid(), depth[pid()], MODE)
+        if (MODE == 2) {
+            printf("[BLOCK-KILL] killing %d before UAF completes\n", pid())
+            raise(9)
+        }
+    }
+}
+
+probe process(@1).function("php_var_unserialize").return
+{
+    d = depth[pid()]
+    if (d <= 1) {
+        delete depth[pid()]
+    } else {
+        depth[pid()] = d - 1
+    }
+}

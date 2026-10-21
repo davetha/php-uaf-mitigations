@@ -1,0 +1,39 @@
+--- a/ext/session/session.c
++++ b/ext/session/session.c
+@@ -3244,6 +3244,8 @@
+ 				add_assoc_long_ex(&progress->data, ZEND_STRL("bytes_processed"), data->post_bytes_processed);
+ 				add_assoc_bool_ex(&progress->data, ZEND_STRL("done"), false);
+ 				add_assoc_zval_ex(&progress->data, ZEND_STRL("files"), &progress->files);
++				/* phpguard 0004: the struct keeps an alias; own an explicit reference */
++				Z_TRY_ADDREF(progress->files);
+ 
+ 				progress->post_bytes_processed = zend_hash_str_find(Z_ARRVAL(progress->data), ZEND_STRL("bytes_processed"));
+ 
+@@ -3257,6 +3259,8 @@
+ 				PS(send_cookie) = 0;
+ 			}
+ 
++			/* phpguard 0004: release the previous file's alias before re-init */
++			zval_ptr_dtor(&progress->current_file);
+ 			array_init(&progress->current_file);
+ 
+ 			/* Each uploaded file has its own array. Trying to make it close to $_FILES entries. */
+@@ -3270,6 +3274,8 @@
+ 			add_assoc_long_ex(&progress->current_file, ZEND_STRL("bytes_processed"), 0);
+ 
+ 			add_next_index_zval(&progress->files, &progress->current_file);
++			/* phpguard 0004: own an explicit reference for the struct alias */
++			Z_TRY_ADDREF(progress->current_file);
+ 
+ 			progress->current_file_bytes_processed = zend_hash_str_find(Z_ARRVAL(progress->current_file), ZEND_STRL("bytes_processed"));
+ 
+@@ -3329,6 +3335,9 @@
+ 			if (!Z_ISUNDEF(progress->data)) {
+ 				zval_ptr_dtor(&progress->data);
+ 			}
++			/* phpguard 0004: drop the struct-owned aliases (parents after children) */
++			zval_ptr_dtor(&progress->files);
++			zval_ptr_dtor(&progress->current_file);
+ 			zval_ptr_dtor(&progress->sid);
+ 			smart_str_free(&progress->key);
+ 			efree(progress);

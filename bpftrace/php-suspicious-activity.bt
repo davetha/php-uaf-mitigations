@@ -1,0 +1,32 @@
+// php-suspicious-activity.bt - SAPI-agnostic anomaly detection.
+// Alerts when a PHP worker (fpm/lsphp/CLI/httpd-with-mod_php) spawns
+// processes from odd paths, opens files in world-writable dirs, or makes
+// outbound connections. Kernel 4.9+, root.
+// Tune the comm list to your binary names. fpm workers should rarely
+// execve; this baseline is useful on its own.
+BEGIN { printf("php-suspicious tracing active...\n"); }
+
+tracepoint:syscalls:sys_enter_execve
+/comm == "php" || comm == "php-fpm" || comm == "lsphp" || comm == "httpd" || comm == "apache2"/
+{
+    $f = str(args.filename);
+    if (strncmp($f, "/tmp/", 5) == 0 || strncmp($f, "/dev/shm/", 9) == 0 ||
+        strstr($f, "../") != 0) {
+        printf("[EXECVE] %s (pid %d) -> %s\n", comm, pid, $f);
+    }
+}
+
+tracepoint:syscalls:sys_enter_openat
+/comm == "php" || comm == "php-fpm" || comm == "lsphp"/
+{
+    $f = str(args.filename);
+    if (strncmp($f, "/tmp/", 5) == 0 && strncmp($f, "/tmp/php", 8) != 0) {
+        printf("[OPEN] %s (pid %d) -> %s\n", comm, pid, $f);
+    }
+}
+
+tracepoint:syscalls:sys_enter_connect
+/comm == "php" || comm == "php-fpm" || comm == "lsphp"/
+{
+    printf("[CONNECT] %s (pid %d)\n", comm, pid);
+}
