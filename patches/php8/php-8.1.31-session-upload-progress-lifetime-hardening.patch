@@ -1,0 +1,41 @@
+diff --git a/ext/session/session.c b/ext/session/session.c
+index 114df24b..f70f181f 100644
+--- a/ext/session/session.c
++++ b/ext/session/session.c
+@@ -3076,6 +3076,8 @@ static int php_session_rfc1867_callback(unsigned int event, void *event_data, vo
+ 				add_assoc_long_ex(&progress->data, "bytes_processed", sizeof("bytes_processed") - 1, data->post_bytes_processed);
+ 				add_assoc_bool_ex(&progress->data, "done", sizeof("done") - 1, 0);
+ 				add_assoc_zval_ex(&progress->data, "files", sizeof("files") - 1, &progress->files);
++				/* phpguard 0004: the struct keeps an alias; own an explicit reference */
++				Z_TRY_ADDREF(progress->files);
+ 
+ 				progress->post_bytes_processed = zend_hash_str_find(Z_ARRVAL(progress->data), "bytes_processed", sizeof("bytes_processed") - 1);
+ 
+@@ -3089,6 +3091,8 @@ static int php_session_rfc1867_callback(unsigned int event, void *event_data, vo
+ 				PS(send_cookie) = 0;
+ 			}
+ 
++			/* phpguard 0004: release the previous file's alias before re-init */
++			zval_ptr_dtor(&progress->current_file);
+ 			array_init(&progress->current_file);
+ 
+ 			/* Each uploaded file has its own array. Trying to make it close to $_FILES entries. */
+@@ -3102,6 +3106,8 @@ static int php_session_rfc1867_callback(unsigned int event, void *event_data, vo
+ 			add_assoc_long_ex(&progress->current_file, "bytes_processed", sizeof("bytes_processed") - 1, 0);
+ 
+ 			add_next_index_zval(&progress->files, &progress->current_file);
++			/* phpguard 0004: own an explicit reference for the struct alias */
++			Z_TRY_ADDREF(progress->current_file);
+ 
+ 			progress->current_file_bytes_processed = zend_hash_str_find(Z_ARRVAL(progress->current_file), "bytes_processed", sizeof("bytes_processed") - 1);
+ 
+@@ -3161,6 +3167,9 @@ static int php_session_rfc1867_callback(unsigned int event, void *event_data, vo
+ 			if (!Z_ISUNDEF(progress->data)) {
+ 				zval_ptr_dtor(&progress->data);
+ 			}
++			/* phpguard 0004: drop the struct-owned aliases (parents after children) */
++			zval_ptr_dtor(&progress->files);
++			zval_ptr_dtor(&progress->current_file);
+ 			zval_ptr_dtor(&progress->sid);
+ 			smart_str_free(&progress->key);
+ 			efree(progress);

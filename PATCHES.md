@@ -34,13 +34,23 @@ will fail with the patches applied; the failure output is a graceful
 `unserialize() === false` or changed back-reference semantics, never memory
 unsafety: bug36424, bug70172, bug70172_2, bug71940, bug70219_1, max_depth.
 
-## Older branches
+## Version ports
 
-- 8.3/8.4: 0001/0003/0005 apply with small context offsets; 0003 is already
-  upstream there via b4a63ec-era picks on some builds - check before applying.
-- 7.x/5.x: the var_unserializer grammar differs substantially; only 0003's
-  upstream equivalent may exist for your branch. For EOL branches prefer the
-  detection/block stack (DETECTION.md) and upgrade planning.
+Per-tag ports live in `patches/php8/` and `patches/php7/` (generated as git
+diffs against the exact tags, apply-check verified). Coverage:
+
+| family | 8.0.30 | 8.1.31 | 8.2.x | 8.3.x | 8.4.x | 8.5.12 | 7.0-7.4 | 5.4-5.6 |
+|---|---|---|---|---|---|---|---|---|
+| 0001 | port | port | port (29/35) | port (25/36) | port (26/27) | port | port | port |
+| 0002 | port | port | port (35) | port (36) | verbatim | verbatim | 7.4.33 | - |
+| 0003 | N/A | verbatim | port (35/36) | port (36) | port (27) | port | N/A | N/A |
+| 0004 | port | port | port (35/36) | port (36) | port (27) | verbatim | 7.4.33 | - |
+| 0005 | - | - | regenerate per tag (anchor survey) | | | - | - | - |
+
+0003 8.0.30 is N/A (pre-enum grammar); 0005 has no verbatim port for any tag
+because the wrapped regions differ per era - regenerate with the documented
+anchors. On 7.x and 5.x, prefer the detection/block stack plus 0001/0003-where-
+available; those branches will never receive the official fix.
 
 ## Relation to the official security releases
 

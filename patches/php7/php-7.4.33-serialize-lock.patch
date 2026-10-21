@@ -1,0 +1,28 @@
+diff --git a/ext/standard/var_unserializer.re b/ext/standard/var_unserializer.re
+index a444cdef..e1822191 100644
+--- a/ext/standard/var_unserializer.re
++++ b/ext/standard/var_unserializer.re
+@@ -666,8 +666,21 @@ static inline int object_custom(UNSERIALIZE_PARAMETER, zend_class_entry *ce)
+ 	if (ce->unserialize == NULL) {
+ 		zend_error(E_WARNING, "Class %s has no unserializer", ZSTR_VAL(ce->name));
+ 		object_init_ex(rval, ce);
+-	} else if (ce->unserialize(rval, ce, (const unsigned char*)*p, datalen, (zend_unserialize_data *)var_hash) != SUCCESS) {
+-		return 0;
++	} else {
++		/* Serializable::unserialize() runs user code that may call
++		 * php_var_unserialize() recursively: bump the lock so the nested
++		 * call gets its own var_hash instead of sharing ours (UAF). */
++		int tmp;
++		if (ce->type & ZEND_INTERNAL_CLASS) {
++			tmp = ce->unserialize(rval, ce, (const unsigned char*)*p, datalen, (zend_unserialize_data *)var_hash);
++		} else {
++			BG(serialize_lock)++;
++			tmp = ce->unserialize(rval, ce, (const unsigned char*)*p, datalen, (zend_unserialize_data *)var_hash);
++			BG(serialize_lock)--;
++		}
++		if (tmp != SUCCESS) {
++			return 0;
++		}
+ 	}
+ 
+ 	(*p) += datalen + 1; /* +1 for '}' */

@@ -1,0 +1,39 @@
+diff --git a/ext/standard/var.c b/ext/standard/var.c
+index aab00e52..6dcf93e0 100644
+--- a/ext/standard/var.c
++++ b/ext/standard/var.c
+@@ -28,6 +28,7 @@
+ #include "php_incomplete_class.h"
+ #include "zend_enum.h"
+ #include "zend_exceptions.h"
++#include "zend_interfaces.h"
+ /* }}} */
+ 
+ struct php_serialize_data {
+@@ -1122,8 +1123,25 @@ again:
+ 					/* has custom handler */
+ 					unsigned char *serialized_data = NULL;
+ 					size_t serialized_length;
++					zend_result serialize_result;
++					zend_bool lock_user_handler;
++
++					/* zend_user_serialize runs userland
++					 * Serializable::serialize(), which may call serialize()
++					 * itself: bump the lock so the nested call gets its own
++					 * reference table instead of numbering into ours
++					 * (corrupt r:N). Internal handlers keep sharing on
++					 * purpose, so only guard the userland handler. */
++					lock_user_handler = (ce->serialize == zend_user_serialize);
++					if (lock_user_handler) {
++						BG(serialize_lock)++;
++					}
++					serialize_result = ce->serialize(struc, &serialized_data, &serialized_length, (zend_serialize_data *)var_hash);
++					if (lock_user_handler) {
++						BG(serialize_lock)--;
++					}
+ 
+-					if (ce->serialize(struc, &serialized_data, &serialized_length, (zend_serialize_data *)var_hash) == SUCCESS) {
++					if (serialize_result == SUCCESS) {
+ 						char b1[32], b2[32];
+ 						char *s1 = zend_print_long_to_buf(b1 + sizeof(b1) - 1, ZSTR_LEN(Z_OBJCE_P(struc)->name));
+ 						size_t l1 = b1 + sizeof(b1) - 1 - s1;
