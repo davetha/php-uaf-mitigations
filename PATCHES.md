@@ -12,6 +12,7 @@ Generate/verify against your exact tree before production use.
 | 0003 | unserialize-context-enum-autoload-lock | Verbatim upstream fix b4a63ec: enum autoloader no longer shares the unserialize context. Public upstream commit (master-only - in no release tag yet); safe. |
 | 0004 | session-upload-progress-lifetime-hardening | Defense-in-depth for the rfc1867 upload-progress struct lifetimes. Not a vulnerability fix; makes an entire dangling-pointer class structurally impossible. |
 | 0005 | unserialize-context-object-init-lock | Closes the scope gap left by 0003: object instantiation during unserialize (constant-AST property defaults, property hooks) can autoload and run `unserialize()` - same sharing bug, different grammar site. Unfixed upstream at time of writing. |
+| 0006 | unserialize-destroy-window-detach | Port of upstream PR #21828 (unmerged): detaches the unserialize state before teardown so a destructor re-entering unserialize() during cleanup gets a fresh context (GH #21824). Applies verbatim to 7.4 through 8.5.12. |
 
 ## Apply + build
 
@@ -38,9 +39,10 @@ Two upstream fixes sit in open PRs and are in NO release tag as of
   the teardown window): issue
   https://github.com/php/php-src/issues/21824, fix PR
   https://github.com/php/php-src/pull/21828 ("Avoid unserialize context
-  reuse during cleanup"). The destroy-window probes in DETECTION.md
-  detect/block this second shape at runtime in the meantime; a 0006 port
-  of the PR is the planned source-level fix.
+  reuse during cleanup"). Our 0006 ports that fix (the destroy function
+  is byte-identical from 7.4 through 8.5.12, so one patch covers all);
+  the destroy-window probes in DETECTION.md cover it at runtime for hosts
+  that cannot patch.
 
 ## Known test-suite effects (fail-by-design)
 

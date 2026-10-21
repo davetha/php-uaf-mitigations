@@ -9,6 +9,8 @@ sites identical through 8.4; note 7.x never received the official OOM-bailout
 fix, so the 0004-without-bailout caveat in the 8.x README applies: an OOM
 mid-upload leaks the widened progress set - stock behavior, not a regression).
 0003 (enum grammar) and 0005 (post-8.1 code shapes) do not exist for 7.x.
+0006 (destroy-window detach, 2026-10-21) applies verbatim to 7.4.33 too:
+the destroy function is byte-identical 7.4-8.5.
 
 The fix wraps the
 `ce->unserialize(...)` dispatch in `ext/standard/var_unserializer.re`

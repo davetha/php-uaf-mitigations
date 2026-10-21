@@ -1,0 +1,57 @@
+diff --git a/ext/standard/tests/serialize/gh21824.phpt b/ext/standard/tests/serialize/gh21824.phpt
+new file mode 100644
+index 0000000000..4182dfcb2b
+--- /dev/null
++++ b/ext/standard/tests/serialize/gh21824.phpt
+@@ -0,0 +1,24 @@
++--TEST--
++GH-21824 (Crash in unserialize() with destructor reentry)
++--ENV--
++USE_ZEND_ALLOC=0
++--FILE--
++<?php
++class Trigger {
++    public function __destruct() {
++        @unserialize('i:1;');
++    }
++}
++
++$payload = 'a:1019:{';
++for ($i = 0; $i < 1017; $i++) {
++    $payload .= "i:$i;s:1:\"A\";";
++}
++$payload .= 'i:1017;O:7:"Trigger":0:{}';
++$payload .= 'i:1017;i:0;}';
++
++@unserialize($payload);
++echo "Done\n";
++?>
++--EXPECT--
++Done
+diff --git a/ext/standard/var_unserializer.re b/ext/standard/var_unserializer.re
+index 353c7086d4..7fb2aa1235 100644
+--- a/ext/standard/var_unserializer.re
++++ b/ext/standard/var_unserializer.re
+@@ -83,12 +83,19 @@ PHPAPI php_unserialize_data_t php_var_unserialize_init(void) {
+ 
+ PHPAPI void php_var_unserialize_destroy(php_unserialize_data_t d) {
+ 	/* fprintf(stderr, "UNSERIALIZE_DESTROY == lock: %u, level: %u\n", BG(serialize_lock), BG(unserialize).level); */
+-	if (BG(serialize_lock) || BG(unserialize).level == 1) {
++	if (BG(serialize_lock)) {
+ 		var_destroy(&d);
+ 		efree(d);
+-	}
+-	if (!BG(serialize_lock) && !--BG(unserialize).level) {
++	} else if (BG(unserialize).level == 1) {
++		/* phpguard 0006 / upstream PR #21828: var_destroy() may re-enter
++		 * unserialize() while running destructors - detach the global state
++		 * BEFORE teardown so the re-entry gets a fresh context (GH #21824). */
+ 		BG(unserialize).data = NULL;
++		BG(unserialize).level = 0;
++		var_destroy(&d);
++		efree(d);
++	} else {
++		--BG(unserialize).level;
+ 	}
+ }
+ 
