@@ -9,7 +9,7 @@ Generate/verify against your exact tree before production use.
 |---|------|--------|
 | 0001 | serialize-lock-in-zend_user_unserialize | Locks the unserialize context across userland `Serializable::unserialize` dispatch, so a re-entrant `unserialize()` gets its own context instead of sharing (the use-after-free primitive of the unserialize-reentrancy family). Gated to skip internal handlers. |
 | 0002 | EXPERIMENTAL serialize-lock-in-serialize-dispatch | Same lock on the serialize side (custom `serialize()` handlers). Optional; see notes in the repo research docs. |
-| 0003 | unserialize-context-enum-autoload-lock | Verbatim upstream fix b4a63ec: enum autoloader no longer shares the unserialize context. Public upstream commit; safe. |
+| 0003 | unserialize-context-enum-autoload-lock | Verbatim upstream fix b4a63ec: enum autoloader no longer shares the unserialize context. Public upstream commit (master-only - in no release tag yet); safe. |
 | 0004 | session-upload-progress-lifetime-hardening | Defense-in-depth for the rfc1867 upload-progress struct lifetimes. Not a vulnerability fix; makes an entire dangling-pointer class structurally impossible. |
 | 0005 | unserialize-context-object-init-lock | Closes the scope gap left by 0003: object instantiation during unserialize (constant-AST property defaults, property hooks) can autoload and run `unserialize()` - same sharing bug, different grammar site. Unfixed upstream at time of writing. |
 
@@ -44,11 +44,14 @@ unsafety: bug36424, bug70172, bug70172_2, bug71940, bug70219_1, max_depth.
 
 ## Relation to the official security releases
 
-php 8.5.12 / 8.4.27 (2026-10-21) contain the official fixes for the
-2026 unserialize-related CVEs (OOM-bailout state corruption, commit
-31c0ea7d7f). These patches are complementary serialize-reentrancy
-hardening, NOT the official CVE fix: **upgrade to 8.5.12+ / 8.4.27+ for
-the CVEs themselves.** The patches are most useful on EOL branches that
-will never receive the official fix, or stacked on top of current
-releases for defense in depth. The detection and blocking stack remains
-relevant in all cases.
+php 8.2.35 / 8.3.36 / 8.4.27 / 8.5.12 (2026-10-21) contain the official
+fixes for the 2026 unserialize-related CVEs (OOM-bailout state corruption,
+commit 31c0ea7d7f and its backports). These patches are complementary
+serialize-reentrancy hardening, NOT the official CVE fix: **upgrade to one
+of those releases for the CVEs themselves.** Note upstream's own enum fix
+(b4a63ec, the basis of patch 0003) is still in no release tag, so 0003/0005
+still apply on the newest releases. The patches are most useful on EOL
+branches that will never receive the official fix, or stacked on top of
+current releases for defense in depth. The detection and blocking stack
+remains relevant in all cases (but see DETECTION.md: the reentry probes do
+not detect the bailout CVE).

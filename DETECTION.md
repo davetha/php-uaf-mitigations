@@ -1,5 +1,15 @@
 # Detection & blocking
 
+## Coverage vs the official CVEs (advisory 2026-10-21)
+
+The official CVE-2026-109618/-109619 mechanism is OOM-bailout state
+corruption, not userland reentrancy - the **reentry probes (tier 2/3) will
+stay silent for it**. The tier-1 payoff detectors (bash/dash exec chain out
+of php workers, SIGABRT/windowed worker-death oracles) still catch
+exploitation of any flavor, and the blocker tier still contains crashes to
+one worker. Upgrade to 8.2.35+/8.3.36+/8.4.27+/8.5.12+ closes the CVEs;
+the probe stack's primary target remains the serialize-reentrancy family.
+
 ## Quick start: the loader
 
 `php-probe-loader.sh` manages the whole stack (start/stop/status/restart,
