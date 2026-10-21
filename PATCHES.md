@@ -27,6 +27,21 @@ git apply ../patches/0005-unserialize-context-object-init-lock.patch
 For a production build, mirror your distro's configure flags instead of
 `--disable-all`.
 
+## Related unmerged upstream fixes (not included here)
+
+Two upstream fixes sit in open PRs and are in NO release tag as of
+2026-10-21, so the newest releases remain exposed to both shapes:
+
+- enum-autoload context lock (the basis of our 0003, commit b4a63ec) -
+  still unmerged on master.
+- var_destroy cleanup reentry (destructor calling unserialize() inside
+  the teardown window): issue
+  https://github.com/php/php-src/issues/21824, fix PR
+  https://github.com/php/php-src/pull/21828 ("Avoid unserialize context
+  reuse during cleanup"). The destroy-window probes in DETECTION.md
+  detect/block this second shape at runtime in the meantime; a 0006 port
+  of the PR is the planned source-level fix.
+
 ## Known test-suite effects (fail-by-design)
 
 Six phpt tests assert the OLD (pre-fix) cross-dispatch sharing behavior and

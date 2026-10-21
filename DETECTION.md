@@ -63,8 +63,10 @@ A separate shape the depth probes are structurally blind to: after the
 outer unserialize() RETURNS, php_var_unserialize_destroy() still runs
 object destructors with the var_hash mid-teardown; a destructor calling
 unserialize() re-enters the dying context (freed chain-block reads,
-dtor-block writes - upstream GH #21824, fix PR #21828 unmerged, in no
-release tag as of 2026-10-21). The `-destroy-window-` probes arm a window
+dtor-block writes - upstream issue
+https://github.com/php/php-src/issues/21824, fix PR
+https://github.com/php/php-src/pull/21828 unmerged, in no release tag as
+of 2026-10-21). The `-destroy-window-` probes arm a window
 on php_var_unserialize_destroy (PHPAPI symbol, survives stripping) and
 alert/kill on any php_var_unserialize inside it. Live-verified against a
 real trigger on stock 8.5.12: detect prints `[DESTROY-REENTRY]`, block
