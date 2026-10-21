@@ -43,7 +43,19 @@ Two engines: **bpftrace** (modern kernels, 4.9+) and **systemtap**
 ```
 sudo bpftrace bpftrace/php-uaf-chain-detect.bt        # tier 1
 sudo bpftrace bpftrace/php-suspicious-activity.bt     # generic suspicious exec/opens
+sudo bpftrace bpftrace/php-unserialize-reentry-detect.bt /path/to/php   # tier 2
+sudo bpftrace --unsafe bpftrace/php-unserialize-reentry-block.bt /path/to/php  # tier 3
 ```
+
+The bpftrace tier 2/3 twins are functionally identical to the stap
+reentrancy scripts (same uprobe target, pid-keyed nesting depth). Note
+`--unsafe` is bpftrace's required gate for signal(); the blocker SIGKILLs
+the worker at the first nested unserialize. Both twins are live-verified
+against a nested-unserialize trigger: detect prints `[REENTRY]`, block
+kills the process (exit 137). The tier 1 chain-detect tracks php workers
+via a pid set (exec-path match + fork inheritance) because bpftrace
+predicates support neither regex nor working comm globs; httpd/apache2
+mod_php workers are matched by exact comm.
 
 ## systemtap
 

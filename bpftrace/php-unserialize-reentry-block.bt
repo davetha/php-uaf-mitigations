@@ -1,0 +1,53 @@
+#!/usr/bin/env bpftrace
+// php-unserialize-reentry-block.bt - enforcement twin of
+// php-unserialize-reentry-detect.bt for bpftrace hosts (kernel 4.9+,
+// bpftrace >= 0.11 for signal()).
+//
+// When a thread nests php_var_unserialize past THR levels, SIGKILL the
+// whole worker process at the reentry point - before the use-after-free
+// can be weaponized (same containment model as the stap blocker MODE=2:
+// one worker dies, the pool master respawns it).
+//
+// Usage: sudo bpftrace --unsafe php-unserialize-reentry-block.bt /path/to/php
+//   (--unsafe is required by bpftrace for signal().) Kill threshold is the
+//   literal 2 below (edit to tune). TEST ON A
+//   CANARY FIRST: legitimate nested
+//   unserialize in app code (session handlers, cache layers) will be
+//   killed too. Run the detect twin for a day before switching.
+//
+// NOTE: kills are by design; watch dmesg/journal for "Killed process"
+// lines to tune THR. Does not cover the OOM-bailout CVEs (see
+// DETECTION.md coverage section).
+
+BEGIN
+{
+    printf("reentry BLOCKER on %s - workers get SIGKILL at nesting >= 2\n",
+           str($1));
+}
+
+// pid-keyed (not tid): fpm workers are long-lived and unserialize per
+// request; in short-lived cli runs the ld.so runtime-linker uretprobe
+// attach churn can corrupt tid-keyed state, pid keys survive it.
+uprobe:$1:php_var_unserialize
+{
+    @depth[pid]++;
+    if (@depth[pid] >= 2) {
+        printf("[BLOCK-KILL] %s pid=%d nested unserialize depth %d -> SIGKILL\n",
+               comm, pid, @depth[pid]);
+        signal("SIGKILL");
+    }
+}
+
+uretprobe:$1:php_var_unserialize
+{
+    if (@depth[pid] <= 1) {
+        $gone = delete(@depth[pid]);
+    } else {
+        @depth[pid]--;
+    }
+}
+
+END
+{
+    clear(@depth);
+}

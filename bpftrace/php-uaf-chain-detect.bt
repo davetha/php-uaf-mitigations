@@ -12,9 +12,13 @@
 //Usage: sudo bpftrace php-uaf-chain-detect.bt
 //Alert-only. el7 counterpart: stap/php-uaf-chain-detect.stp (can SIGKILL).
 
-//comm match: php/php-fpm/php-cgi (stock, ea-phpXX, alt-php), lsphp/lsphpXX
-//(LiteSpeed incl. cPanel+LS), httpd/apache2 (mod_php),
-//cpanel_php_fpm (cPanel internal UI PHP), imunify360-php* (Imunify360).
+//How php workers are identified: bpftrace predicates do NOT support regex
+//and comm globs match nothing at runtime, so this tracks a pid set instead.
+//A process that execve()s a path containing "php" (php, php-fpm, php82,
+//lsphp, alt-php, cpanel_php_fpm, imunify360-php) is registered; forks
+//inherit the registration (fpm/lsphp workers are forked, never exec'd);
+//exec of anything else or process exit unregisters. httpd/apache2 (mod_php)
+//never exec php and are matched by exact comm instead.
 
 BEGIN
 {
@@ -22,24 +26,41 @@ BEGIN
 }
 
 tracepoint:syscalls:sys_enter_execve
-/(comm == "php" || comm =~ "^php-" || comm =~ "^php[0-9]" || comm =~ "^lsphp" || comm =~ "^cpanel_php" || comm =~ "^imunify360-php" || comm == "httpd" || comm == "apache2")/
 {
     $f = str(args.filename);
-    if ($f == "/bin/sh" || $f == "/bin/bash" || $f == "/bin/dash") {
-        printf("[PAYOFF] %s pid=%d execve(%s)\n", comm, pid, $f);
+    if (@isphp[pid] == 1) {
+        if ($f == "/bin/sh" || $f == "/bin/bash" || $f == "/bin/dash") {
+            printf("[PAYOFF] pid=%d execve(%s)\n", pid, $f);
+        }
+    }
+    if (strcontains($f, "php")) {
+        @isphp[pid] = 1;
+    } else {
+        $d = delete(@isphp[pid]);
     }
 }
 
+tracepoint:sched:sched_process_fork
+/@isphp[args->parent_pid] == 1/
+{
+    @isphp[args->child_pid] = 1;
+}
+
+tracepoint:sched:sched_process_exit
+{
+    $d = delete(@isphp[pid]);
+}
+
 tracepoint:exceptions:page_fault_user
-/(comm == "php" || comm =~ "^php-" || comm =~ "^php[0-9]" || comm =~ "^lsphp" || comm =~ "^cpanel_php" || comm =~ "^imunify360-php" || comm == "httpd" || comm == "apache2")/
+/@isphp[pid] == 1 || comm == "httpd" || comm == "apache2"/
 {
     @faults[pid] = count();
 }
 
 tracepoint:signal:signal_generate
-/(args.sig == 11 || args.sig == 6) && (comm == "php" || comm =~ "^php-" || comm =~ "^php[0-9]" || comm =~ "^lsphp" || comm =~ "^cpanel_php" || comm =~ "^imunify360-php" || comm == "httpd" || comm == "apache2")/
+/(args.sig == 11 || args.sig == 6) && (@isphp[args->pid] == 1 || comm == "httpd" || comm == "apache2")/
 {
-    @deaths[sig] = count();
+    @deaths[args.sig]++;
 }
 
 interval:s:10

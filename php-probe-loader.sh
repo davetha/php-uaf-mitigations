@@ -82,14 +82,20 @@ do_start() {
         local b n
         for b in $bins; do
             n="reentry-$(echo "$b" | tr '/.' '__')"
-            if [ "$TIER" -eq 3 ]; then
-                start_one "$n" stap -g "$BASE/stap/php-unserialize-reentry-block.stp" "$b" -G MODE=2
-            else
-                start_one "$n" stap "$BASE/stap/php-unserialize-reentry-detect.stp" "$b"
-            fi
+            case "$ENGINE:$TIER" in
+                stap:3)
+                    start_one "$n" stap -g "$BASE/stap/php-unserialize-reentry-block.stp" "$b" -G MODE=2 ;;
+                stap:2)
+                    start_one "$n" stap "$BASE/stap/php-unserialize-reentry-detect.stp" "$b" ;;
+                bpftrace:3)
+                    # --unsafe is bpftrace's gate for signal()
+                    start_one "$n" bpftrace --unsafe "$BASE/bpftrace/php-unserialize-reentry-block.bt" "$b" ;;
+                bpftrace:2)
+                    start_one "$n" bpftrace "$BASE/bpftrace/php-unserialize-reentry-detect.bt" "$b" ;;
+            esac
         done
     fi
-    echo "logs and pidfiles in $RUN; first stap run compiles (30-60s warmup)"
+    echo "logs and pidfiles in $RUN; first stap run compiles (30-60s warmup), bpftrace attaches in seconds"
 }
 
 do_stop() {

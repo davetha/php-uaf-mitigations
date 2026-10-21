@@ -1,0 +1,48 @@
+#!/usr/bin/env bpftrace
+// php-unserialize-reentry-detect.bt - bpftrace twin of the stap reentry
+// probe for hosts with bpftrace instead of systemtap (kernel 4.9+).
+// Attaches a uprobe to php_var_unserialize via the binary's dynsym
+// (works on stripped binaries) and alerts when one thread nests
+// unserialize() past THR levels - the shape every variant of the
+// serialize-reentrancy exploit family needs.
+//
+// Usage: sudo bpftrace php-unserialize-reentry-detect.bt /path/to/php
+//   e.g. sudo bpftrace php-unserialize-reentry-detect.bt /usr/sbin/php-fpm8.2
+//   Threshold: edit the 2 below (any nesting is unusual; 3 is looser).
+// Requires bpftrace >= 0.11 (signal() only needed by the -block twin).
+// Alert-only; see php-unserialize-reentry-block.bt for enforcement.
+
+BEGIN
+{
+    printf("reentry probe on %s (THR=2, edit threshold in source)\n", str($1));
+}
+
+// pid-keyed (not tid): fpm workers are long-lived and unserialize per
+// request; in short-lived cli runs the ld.so runtime-linker uretprobe
+// attach churn can corrupt tid-keyed state, pid keys survive it.
+uprobe:$1:php_var_unserialize
+{
+    @depth[pid]++;
+    if (@depth[pid] >= 2) {
+        printf("[REENTRY] %s pid=%d nested unserialize depth %d\n",
+               comm, pid, @depth[pid]);
+    }
+}
+
+uretprobe:$1:php_var_unserialize
+{
+    if (@depth[pid] <= 1) {
+        $gone = delete(@depth[pid]);
+    } else {
+        @depth[pid]--;
+    }
+}
+
+// no interval probe here: on short-lived cli targets it would re-attach a
+// kprobe per tick and race the ld.so uretprobe trampoline. State is
+// per-pid; stale entries clear when the process exits (and via END).
+
+END
+{
+    clear(@depth);
+}
