@@ -7,6 +7,8 @@ contains NO proof-of-concept or exploit code, by design. It
 
 - `patches/` - source patches 0001–0005 (see PATCHES.md)
 - `php-probe-loader.sh` - one-command stack management (start/stop/status)
+- `modsec/` - mod_security rules (outer WAF ring, includes the interim disclosure rule verbatim)
+- `ini-hardening/` - php.ini surface-reduction and payoff-decapitation settings
 - `stap/` - systemtap scripts for el7/el8/CloudLinux/cPanel hosts
 - `bpftrace/` - bpftrace equivalents for modern kernels
 - PATCHES.md - what each patch fixes, how to apply and build
