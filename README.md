@@ -1,7 +1,7 @@
-# phpguard mitigation-kit
-
+# php-uaf-mitigations
+Source patches, live detection, and a runtime blocker for the PHP unserialize-reentrancy UAF family.
 Defensive distribution: source patches, live detection, and a runtime blocker
-for the PHP unserialize vulnerability family (unserialize-reentrancy family). This kit
+for the PHP unserialize-reentrancy UAF family. This kit
 contains NO proof-of-concept or exploit code — the accompanying repository
 research documents stay out of this directory by design.
 
