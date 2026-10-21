@@ -1,5 +1,5 @@
 #! /usr/bin/env stap
-# php-uprobe-template.stp — function-entry tracing for the CVE target on
+# php-uprobe-template.stp - function-entry tracing for the CVE target on
 # CentOS 7 / el7 (no bpftrace there; stap needs kernel-debuginfo).
 # Fill in the two placeholders below from the disclosure, then:
 #   stap php-uprobe-template.stp

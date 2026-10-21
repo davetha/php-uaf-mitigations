@@ -1,7 +1,7 @@
 # Detection & blocking
 
 Two engines: **bpftrace** (modern kernels, 4.9+) and **systemtap**
-(el7/el8/CloudLinux — the cPanel world). Same three-tier design.
+(el7/el8/CloudLinux - the cPanel world). Same three-tier design.
 
 | Tier | Signal | Catches | Cost |
 |------|--------|---------|------|
@@ -29,14 +29,14 @@ stap stap/php-uaf-chain-detect.stp
 stap stap/php-suspicious-activity.stp
 ```
 
-Tier 2 (reentrancy oracle — needs the PHP binary path; works on stripped
+Tier 2 (reentrancy oracle - needs the PHP binary path; works on stripped
 binaries because ZEND_API symbols live in the dynsym):
 
 ```
 stap stap/php-unserialize-reentry-detect.stp /opt/alt/php74/usr/bin/php
 ```
 
-Tier 3 (blocker). Run tier 2 in alert mode for a day first — a few frameworks
+Tier 3 (blocker). Run tier 2 in alert mode for a day first - a few frameworks
 legitimately nest unserialize() once:
 
 ```

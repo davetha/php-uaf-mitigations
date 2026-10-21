@@ -11,7 +11,7 @@ Generate/verify against your exact tree before production use.
 | 0002 | EXPERIMENTAL serialize-lock-in-serialize-dispatch | Same lock on the serialize side (custom `serialize()` handlers). Optional; see notes in the repo research docs. |
 | 0003 | unserialize-context-enum-autoload-lock | Verbatim upstream fix b4a63ec: enum autoloader no longer shares the unserialize context. Public upstream commit; safe. |
 | 0004 | session-upload-progress-lifetime-hardening | Defense-in-depth for the rfc1867 upload-progress struct lifetimes. Not a vulnerability fix; makes an entire dangling-pointer class structurally impossible. |
-| 0005 | unserialize-context-object-init-lock | Closes the scope gap left by 0003: object instantiation during unserialize (constant-AST property defaults, property hooks) can autoload and run `unserialize()` — same sharing bug, different grammar site. Unfixed upstream at time of writing. |
+| 0005 | unserialize-context-object-init-lock | Closes the scope gap left by 0003: object instantiation during unserialize (constant-AST property defaults, property hooks) can autoload and run `unserialize()` - same sharing bug, different grammar site. Unfixed upstream at time of writing. |
 
 ## Apply + build
 
@@ -37,7 +37,7 @@ unsafety: bug36424, bug70172, bug70172_2, bug71940, bug70219_1, max_depth.
 ## Older branches
 
 - 8.3/8.4: 0001/0003/0005 apply with small context offsets; 0003 is already
-  upstream there via b4a63ec-era picks on some builds — check before applying.
+  upstream there via b4a63ec-era picks on some builds - check before applying.
 - 7.x/5.x: the var_unserializer grammar differs substantially; only 0003's
   upstream equivalent may exist for your branch. For EOL branches prefer the
   detection/block stack (DETECTION.md) and upgrade planning.

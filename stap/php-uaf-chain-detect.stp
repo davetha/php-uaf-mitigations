@@ -1,5 +1,5 @@
 #! /usr/bin/env stap
-# php-uaf-chain-detect.stp — CentOS 7 / el7 live detection of the
+# php-uaf-chain-detect.stp - CentOS 7 / el7 live detection of the
 # unserialize var_hash UAF chain. kernel-debuginfo NOT required (syscall
 # tapsets only). Install: yum install systemtap systemtap-runtime.
 # Run: stap php-uaf-chain-detect.stp            (alert mode)

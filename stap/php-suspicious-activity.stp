@@ -1,5 +1,5 @@
 #! /usr/bin/env stap
-# php-suspicious-activity.stp — CentOS 7 / kernel 3.10 replacement for
+# php-suspicious-activity.stp - CentOS 7 / kernel 3.10 replacement for
 # bpftrace/php-suspicious-activity.bt (el7 has no bpftrace; kernel too old).
 # Install first: yum install systemtap systemtap-runtime; debuginfo-install kernel
 # Run: stap php-suspicious-activity.stp

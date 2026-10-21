@@ -1,9 +1,9 @@
 #! /usr/bin/env stap
-# php-unserialize-reentry-detect.stp — pre-payoff detection of the
+# php-unserialize-reentry-detect.stp - pre-payoff detection of the
 # unserialize var_hash exploit family (CVE-2026-109618 class). Attaches a
 # uprobe to php_var_unserialize in the PHP binary's dynamic symbol table
 # (works on stripped binaries; no debuginfo needed) and alerts when the
-# same process nests unserialize() >= DEPTH levels — the shape every
+# same process nests unserialize() >= DEPTH levels - the shape every
 # variant of this chain needs (Serializable::unserialize re-entry, enum
 # autoloader, AST-default autoloader, attacker-planted session decode).
 #
